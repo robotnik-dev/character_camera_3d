@@ -28,6 +28,7 @@ class_name CharacterCamera3D
 
 ## when keeping the character in screen, how smooth the camera zooms out
 @export_range(90.0, 100.0, 0.1) var zoom_smoothness: float = 96.0
+@export_range(90.0, 100.0, 0.1) var auto_rotation_smoothness: float = 0.95
 
 @export_category("Manual Camera Control")
 @export_range(0.1, 1.3, 0.1) var zoom_speed: float = 0.7:
@@ -39,6 +40,8 @@ class_name CharacterCamera3D
 @export_range(0.1, 1.0, 0.1) var control_sensitivity: float = 0.5
 ## speed of manual rotating the camera around character
 @export_range(90.0, 100.0, 0.1) var rotation_smoothness: float = 95.0
+@export_range(-0.8, -0.2, 0.1) var rotation_limit_top: float = -0.75
+@export_range(0.0, 0.8, 0.1) var rotation_limit_bottom: float = 0.1
 ## Manual rotating inverted
 @export var y_inverted: bool = false
 
@@ -55,6 +58,7 @@ var character: CharacterBody3D
 var ghost_target: Node3D
 ## parent node for keeping the camera at a distance and collision checks
 var spring_arm: SpringArm3D
+var h_rotation_node: Node3D
 
 ## local initial position of springarm (pivot) node. Basically the base height
 ## of the focus point (ideally above character head)
@@ -66,6 +70,7 @@ var _zoom_distance: float:
 	set(value):
 		_zoom_distance = clampf(value, minimum_zoom, maximum_zoom)
 
+
 func _ready() -> void:
 	_setup_springarm_parent()
 	_setup_ghost_target()
@@ -74,13 +79,16 @@ func _ready() -> void:
 func _setup_springarm_parent() -> void:
 	character = owner as CharacterBody3D
 	spring_arm = SpringArm3D.new()
-	spring_arm.top_level = true
-	if not collision_shape_for_springarm:
-		collision_shape_for_springarm = CapsuleShape3D.new()
+#	if not collision_shape_for_springarm:
+#		collision_shape_for_springarm = CapsuleShape3D.new()
 	spring_arm.add_excluded_object(character.get_rid())
+	h_rotation_node = Node3D.new()
+	h_rotation_node.top_level = true
 	
 	add_sibling.call_deferred(spring_arm, true)
+	add_sibling.call_deferred(h_rotation_node, true)
 	reparent.call_deferred(spring_arm)
+	spring_arm.reparent.call_deferred(h_rotation_node)
 
 func _setup_ghost_target() -> void:
 	ghost_target = Node3D.new()
@@ -97,8 +105,11 @@ func _physics_process(delta : float):
 	if Engine.is_editor_hint():
 		return
 	
-	if not (_character_is_moving_towards_cam() or _character_x_y_plane_velocity_is_zero()):
+	if not (_character_is_looking_towards_cam() or _character_x_y_plane_velocity_is_zero()):
 		_auto_rotate()
+	
+	if not _character_x_y_plane_velocity_is_zero():
+		_center_camera_y()
 	
 	var look_direction: Vector2 = _get_look_direction()
 	if look_direction.length() > 0:
@@ -120,42 +131,53 @@ func _unhandled_input(event: InputEvent) -> void:
 		var zoom_out = Input.get_action_strength("zoom_out")
 		_zoom_distance = camera_zoom + zoom_out * zoom_speed
 
+## follow the rotation of the character
 func _auto_rotate() -> void:
-	var offset: float = character.rotation.y - spring_arm.rotation.y
+	var offset: float = character.rotation.y - h_rotation_node.rotation.y
 	var target_angle: float = (
 		character.rotation.y - 2 * PI if offset > PI
 		else character.rotation.y + 2 * PI if offset < -PI
 		else character.rotation.y
 	)
-	spring_arm.rotation.y = lerp_angle(spring_arm.rotation.y, target_angle, 0.015)
 
+	var weight = 1 - (auto_rotation_smoothness / 100)
+	h_rotation_node.rotation.y = lerp_angle(h_rotation_node.rotation.y, target_angle, weight)
+
+## rotate the Node3D for horizontal rotation and the springarm vor vertical
 func _manual_rotate(offset: Vector2) -> void:
 	var target_rotation: Vector3
-	target_rotation.y = spring_arm.rotation.y - offset.x
+	target_rotation.y = h_rotation_node.rotation.y - offset.x
 	target_rotation.x = spring_arm.rotation.x + offset.y
 	if y_inverted:
 		target_rotation.x * -1.0
-	target_rotation.x = clamp(target_rotation.x, -0.75, 0.0)
+	target_rotation.x = clamp(target_rotation.x, rotation_limit_top, rotation_limit_bottom)
 	target_rotation.z = 0
 	
 	var weight = 1 - (rotation_smoothness / 100)
 	spring_arm.rotation.x = lerpf(spring_arm.rotation.x, target_rotation.x, weight)
-	spring_arm.rotation.y = lerpf(spring_arm.rotation.y, target_rotation.y, weight)
+	h_rotation_node.rotation.y = lerpf(h_rotation_node.rotation.y, target_rotation.y, weight)
+
+## auto center camera when movement happens
+func _center_camera_y() -> void:
+	var weight = 1 - (rotation_smoothness / 100)
+	spring_arm.rotation.x = lerpf(spring_arm.rotation.x, 0, weight)
 
 ## interpolates between the ghost target and the SpringArm3D
 ## the SpringArm3D should follow the ghost target
 func _interpolate_translation(delta: float) -> void:
 	var translation_factor: float = camera_speed * delta
 	var ghost_target_transform: Transform3D = ghost_target.global_transform
-	var origin_transform: Transform3D = Transform3D(Basis(), spring_arm.global_transform.origin)
-	var basis_transform: Transform3D = Transform3D(spring_arm.global_transform.basis, Vector3())
+	var origin_transform: Transform3D = Transform3D(Basis(), h_rotation_node.global_transform.origin)
+	var basis_transform: Transform3D = Transform3D(h_rotation_node.global_transform.basis, Vector3())
 	# TODO: jittering when hitting collision
-#	if _is_springarm_colliding():
-#		translation_factor = 0.0
-	if _character_is_moving_towards_cam():
-		translation_factor *= 1.5
+	if _is_springarm_colliding():
+#		translation_factor = 0.8
+#		print("R")
+		pass
+#	if _character_is_looking_towards_cam():
+#		translation_factor *= 1.5
 	origin_transform = origin_transform.interpolate_with(ghost_target_transform, translation_factor)
-	spring_arm.global_transform = Transform3D(basis_transform.basis, origin_transform.origin)
+	h_rotation_node.global_transform = Transform3D(basis_transform.basis, origin_transform.origin)
 
 ## handles transition between desired zoom and current zoom. Manipulates property
 ## springarm.spring_length in the background
@@ -169,7 +191,8 @@ func _interpolate_zoom(delta: float) -> void:
 			# check if no springarm collision happens, only then zoom out
 			if not _is_springarm_colliding():
 				_zoom_distance = camera_zoom + camera_zoom / 4
-	
+			else:
+				_zoom_distance = camera_zoom
 	var weight = 1 - (zoom_smoothness / 100)
 	camera_zoom = lerpf(camera_zoom, _zoom_distance, weight)
 
@@ -186,6 +209,7 @@ func _keep_character_in_center() -> void:
 		if keep_character_in_screen:
 			_ghost_position.y = character.global_position.y + _start_position.y
 	
+	# plattform snap
 	elif character.is_on_floor():
 		_ghost_position.y = character.global_position.y + _start_position.y
 
@@ -203,11 +227,19 @@ func _update_ghost_transform() -> void:
 
 ## for auto rotation only. Compares the player look at direction with the
 ## camera direction
-func _character_is_moving_towards_cam() -> bool:
-	var char_facing_dir: Vector3 = character.global_transform.basis.z.normalized()
-	var cam_facing_dir: Vector3 = global_transform.basis.z.normalized()
-	var angle_to_cam = char_facing_dir.dot(cam_facing_dir)
-	return angle_to_cam <= -0.8
+func _character_is_looking_towards_cam() -> bool:
+	var char_dir: Vector3 = character.global_transform.basis.z.normalized()
+	var pivot_dir: Vector3 = spring_arm.global_transform.basis.z.normalized()
+	
+	var char_projection = char_dir.project(Vector3.FORWARD)
+	var pivot_projection = pivot_dir.project(Vector3.FORWARD)
+
+	var pivot_y_rot: float = spring_arm.global_rotation.y
+	var char_y_rot: float = character.global_rotation.y
+	var diff: float = pivot_y_rot - char_y_rot
+	var offset: float = 0.4
+	
+	return abs(diff) >= PI - offset and abs(diff) <= PI + offset
 
 ## for auto rotation only. Returns true if character is not moving
 func _character_x_y_plane_velocity_is_zero() -> bool:
