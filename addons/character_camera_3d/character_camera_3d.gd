@@ -28,7 +28,8 @@ class_name CharacterCamera3D
 
 ## when keeping the character in screen, how smooth the camera zooms out
 @export_range(90.0, 100.0, 0.1) var zoom_smoothness: float = 96.0
-@export_range(90.0, 100.0, 0.1) var auto_rotation_smoothness: float = 0.95
+## Speed of the auto rotation when moving
+@export_range(1.3, 1.8, 0.05) var auto_rotation_speed: float = 1.5
 
 @export_category("Manual Camera Control")
 @export_range(0.1, 1.3, 0.1) var zoom_speed: float = 0.7:
@@ -40,8 +41,8 @@ class_name CharacterCamera3D
 @export_range(0.1, 1.0, 0.1) var control_sensitivity: float = 0.5
 ## speed of manual rotating the camera around character
 @export_range(90.0, 100.0, 0.1) var rotation_smoothness: float = 95.0
-@export_range(-0.8, -0.2, 0.1) var rotation_limit_top: float = -0.75
-@export_range(0.0, 0.8, 0.1) var rotation_limit_bottom: float = 0.1
+@export_range(-1.2, -0.1, 0.05) var rotation_limit_top: float = -0.75
+@export_range(0.0, 1.2, 0.05) var rotation_limit_bottom: float = 0.8
 ## Manual rotating inverted
 @export var y_inverted: bool = false
 
@@ -140,8 +141,9 @@ func _auto_rotate() -> void:
 		else character.rotation.y
 	)
 
-	var weight = 1 - (auto_rotation_smoothness / 100)
-	h_rotation_node.rotation.y = lerp_angle(h_rotation_node.rotation.y, target_angle, weight)
+	var weight = (auto_rotation_speed / 100)
+	
+	h_rotation_node.rotation.y = lerpf(h_rotation_node.rotation.y, target_angle, weight)
 
 ## rotate the Node3D for horizontal rotation and the springarm vor vertical
 func _manual_rotate(offset: Vector2) -> void:
