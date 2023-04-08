@@ -4,8 +4,13 @@ class_name CharacterCamera3D
 ## An orbit camera for Third Person Characters that handles the tracking and
 ## following and keeps the target in screen. Character must be of type CharacterBody3D
 ## Just set the y-position of this node in the editor above your character mesh.
+## IMPORTANT: you need to set the input mappings for manual camera control in the
+## Projects Settings: look_left, look_right, look_up, look_down
 
 @export_category("Auto Focus Camera")
+## tries to push the camera back when character leaves the screen
+@export var auto_rotate: bool = true
+
 ## The speed of the following camera
 @export_range(2.0, 8.0, 0.1) var camera_speed: float = 5.0:
 	set(value):
@@ -89,7 +94,7 @@ func _setup_springarm_parent() -> void:
 	add_sibling.call_deferred(h_rotation_node, true)
 	reparent.call_deferred(spring_arm)
 	spring_arm.reparent.call_deferred(h_rotation_node)
-	# wait for springarm to bea ready
+	# wait for springarm to be ready
 	spring_arm.ready.connect(func(): set_physics_process(true))
 
 func _setup_ghost_target() -> void:
@@ -104,10 +109,10 @@ func _set_initial_values() -> void:
 	_zoom_distance = camera_zoom
 
 func _physics_process(delta : float):
-	if not (_character_is_looking_towards_cam() or _character_x_y_plane_velocity_is_zero()):
+	if not _character_is_looking_towards_cam() and _character_moving() and auto_rotate:
 		_auto_rotate()
 	
-	if not _character_x_y_plane_velocity_is_zero():
+	if not _character_moving():
 		_center_camera_y()
 	
 	var look_direction: Vector2 = _get_look_direction()
@@ -236,8 +241,10 @@ func _character_is_looking_towards_cam() -> bool:
 	return abs(diff) >= PI - offset and abs(diff) <= PI + offset
 
 ## for auto rotation only. Returns true if character is not moving
-func _character_x_y_plane_velocity_is_zero() -> bool:
-	return is_equal_approx(character.velocity.x, 0) or is_equal_approx(character.velocity.z, 0)
+func _character_moving() -> bool:
+	var plane_velocity: Vector2 = Vector2(character.velocity.x, character.velocity.z)
+	var is_moving: bool = plane_velocity.length() > 0
+	return is_moving
 
 ## get input action strength for manual camera control
 func _get_look_direction() -> Vector2:
