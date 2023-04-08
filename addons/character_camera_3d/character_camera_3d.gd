@@ -78,10 +78,9 @@ func _ready() -> void:
 	_set_initial_values()
 
 func _setup_springarm_parent() -> void:
-	character = owner as CharacterBody3D
+	set_physics_process(false)
+	character = get_parent() as CharacterBody3D
 	spring_arm = SpringArm3D.new()
-#	if not collision_shape_for_springarm:
-#		collision_shape_for_springarm = CapsuleShape3D.new()
 	spring_arm.add_excluded_object(character.get_rid())
 	h_rotation_node = Node3D.new()
 	h_rotation_node.top_level = true
@@ -90,6 +89,8 @@ func _setup_springarm_parent() -> void:
 	add_sibling.call_deferred(h_rotation_node, true)
 	reparent.call_deferred(spring_arm)
 	spring_arm.reparent.call_deferred(h_rotation_node)
+	# wait for springarm to bea ready
+	spring_arm.ready.connect(func(): set_physics_process(true))
 
 func _setup_ghost_target() -> void:
 	ghost_target = Node3D.new()
@@ -103,9 +104,6 @@ func _set_initial_values() -> void:
 	_zoom_distance = camera_zoom
 
 func _physics_process(delta : float):
-	if Engine.is_editor_hint():
-		return
-	
 	if not (_character_is_looking_towards_cam() or _character_x_y_plane_velocity_is_zero()):
 		_auto_rotate()
 	
@@ -171,13 +169,7 @@ func _interpolate_translation(delta: float) -> void:
 	var ghost_target_transform: Transform3D = ghost_target.global_transform
 	var origin_transform: Transform3D = Transform3D(Basis(), h_rotation_node.global_transform.origin)
 	var basis_transform: Transform3D = Transform3D(h_rotation_node.global_transform.basis, Vector3())
-	# TODO: jittering when hitting collision
-	if _is_springarm_colliding():
-#		translation_factor = 0.8
-#		print("R")
-		pass
-#	if _character_is_looking_towards_cam():
-#		translation_factor *= 1.5
+
 	origin_transform = origin_transform.interpolate_with(ghost_target_transform, translation_factor)
 	h_rotation_node.global_transform = Transform3D(basis_transform.basis, origin_transform.origin)
 
