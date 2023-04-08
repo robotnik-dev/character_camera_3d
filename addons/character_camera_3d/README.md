@@ -1,7 +1,11 @@
 # CharacterCamera3D Node for Godot 4.x
 
 ## Description
-Third Person Character Camera for free orbit around a CharacterBody3D. It handles the following and keeps the character in screen.
+Third Person Character Camera for free orbit around a CharacterBody3D. It handles the following and keeps the character in screen. \
+**IMPORTANT**: You need to have input mappings for manual camera control in Project Settings \
+look_left, look_right, look_up, look_down \
+https://docs.godotengine.org/en/stable/tutorials/inputs/input_examples.html
+
 
 ## Following over slopes
 ![gif1](images/y-following.gif "Y Following")
