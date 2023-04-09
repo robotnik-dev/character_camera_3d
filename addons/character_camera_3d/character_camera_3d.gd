@@ -83,7 +83,6 @@ func _ready() -> void:
 	_set_initial_values()
 
 func _setup_springarm_parent() -> void:
-	set_physics_process(false)
 	character = get_parent() as CharacterBody3D
 	spring_arm = SpringArm3D.new()
 	spring_arm.add_excluded_object(character.get_rid())
@@ -94,16 +93,15 @@ func _setup_springarm_parent() -> void:
 	add_sibling.call_deferred(h_rotation_node, true)
 	reparent.call_deferred(spring_arm)
 	spring_arm.reparent.call_deferred(h_rotation_node)
-	# wait for springarm to be ready
-	spring_arm.ready.connect(func(): set_physics_process(true))
 
 func _setup_ghost_target() -> void:
 	ghost_target = Node3D.new()
 	add_child(ghost_target)
 
 func _set_initial_values() -> void:
-	_start_position = global_position
-	ghost_target.position.y = character.global_position.y + _start_position.y
+	_start_position = position
+	ghost_target.position.y = character.position.y + _start_position.y
+	
 	spring_arm.shape = collision_shape_for_springarm
 	spring_arm.spring_length = camera_zoom
 	_zoom_distance = camera_zoom
